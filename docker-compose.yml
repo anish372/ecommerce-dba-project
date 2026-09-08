@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: ecommerce_dba_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ecommerce_dba
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      # Note: 02-setup-replication.sh is NOT mounted here on purpose.
+      # Init scripts only run once, when the data directory is empty —
+      # since this container already has data, mounting it wouldn't do
+      # anything retroactively. See REPLICATION.md for the manual
+      # one-time commands to enable replication on an existing primary.
+      # (Anyone spinning this project up completely fresh CAN add that
+      # mount back in before their first `docker compose up`.)
+
+  replica:
+    image: postgres:16
+    container_name: ecommerce_dba_replica
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PRIMARY_HOST: db
+      REPLICATION_USER: replicator
+      REPLICATION_PASSWORD: replicator_pw
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_replica:/var/lib/postgresql/data
+      - ./replica-entrypoint.sh:/replica-entrypoint.sh
+    entrypoint: ["bash", "/replica-entrypoint.sh"]
+
+volumes:
+  pgdata:
+  pgdata_replica:
